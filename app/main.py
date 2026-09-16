@@ -1,10 +1,8 @@
 from fastapi import FastAPI
 
 from app.routers.notes import router as notes_router
-from app.database import Base, engine
-from app import models
 
-Base.metadata.create_all(bind = engine)
+
 
 app = FastAPI()
 
