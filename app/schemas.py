@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 class NoteCreate(BaseModel):
     title: str
@@ -8,4 +8,4 @@ class NoteCreate(BaseModel):
 class NoteResponse(NoteCreate):
     id: int
 
-    
+    model_config = ConfigDict(from_attributes=True)

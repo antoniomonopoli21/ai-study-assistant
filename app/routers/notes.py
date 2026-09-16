@@ -1,69 +1,100 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 
-from app.schemas import NoteCreate
-from app import storage
+from app.schemas import NoteCreate, NoteResponse
+from app.database import get_db
+from app.models import Note
+
 
 router = APIRouter(
     prefix = "/notes",
     tags = ["notes"]
 )
 
-@router.post("/", status_code = 201)
-def create_note(note: NoteCreate):
+@router.post("/", status_code = 201, response_model = NoteResponse)
+def create_note(
+    note: NoteCreate,
+    db: Session = Depends(get_db)
+    ):
+    db_note = Note(
+        title =  note.title,
+        content = note.content,
+        priority = note.priority
+    ) 
+    db.add(db_note)
+    db.commit()
+    db.refresh(db_note)
 
-    note_data = {
-        "id": storage.next_id,
-        "title": note.title,
-        "content": note.content,
-        "priority": note.priority
-
-    }
-    storage.notes.append(note_data)
-    storage.next_id += 1
-    return note_data
-
-@router.get("/")
-def get_notes():
-    return storage.notes
+    return db_note
 
 
-@router.get("//{note_id}")
-def get_note(note_id: int):
-    for note in storage.notes:
-        if note["id"] == note_id:
-            return note
     
-    raise HTTPException(
-        status_code = 404,
-        detail = "Note not found"
+
+@router.get("/", response_model = list[NoteResponse])
+def get_notes(
+    db: Session = Depends(get_db)
+):
+    return db.query(Note).all()
+
+
+@router.get("//{note_id}", response_model=NoteResponse)
+def get_note(
+    note_id: int,
+    db: Session = Depends(get_db)
+    ):
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code = 404,
+            detail = "Note not found"
+    )
+    return note
+
+
+
+@router.put("/{note_id}",
+            response_model= NoteResponse
+            )
+def update_note(
+    note_id: int, 
+    updated_note: NoteCreate,
+    db: Session = Depends(get_db)
+):
+    note = db.get(Note, note_id)
+
+    if note is None:
+        raise HTTPException(
+            status_code = 404,
+            detail = "Note not found"
     )
 
+    note.title = updated_note.title
+    note.content = updated_note.content
+    note.priority = updated_note.priority
 
+    db.commit()
+    db.refresh(note)
 
-@router.put("/{note_id}")
-def update_note(note_id: int, updated_note: NoteCreate):
-    for note in storage.notes:
-        if note["id"] == note_id:
-            note["title"] = updated_note.title
-            note["content"] = updated_note.content
-            note["priority"] = updated_note.priority
-
-            return note
-    raise HTTPException(
-        status_code = 404,
-        detail = "Note not found"
-    )
+    return note
 
 @router.delete("/{note_id}")
-def delete_note(note_id: int):
-    for note in storage.notes:
-        if note["id"] == note_id:
-            storage.notes.remove(note)
+def delete_note(
+    note_id: int,
+    db: Session = Depends(get_db)
+):
+    note = db.get(Note, note_id)
 
-            return{
-                "message": "Note deleted successfully"
-            }
-    raise HTTPException(
-        status_code = 404,
-        detail = "Note not found"
-    )
+    if note is None:
+        raise HTTPException(
+                status_code = 404,
+                detail = "Note not found"
+            )
+
+    db.delete(note)
+    db.commit()
+
+    return{
+            "message": "Note deleted successfully"
+    }
+    
