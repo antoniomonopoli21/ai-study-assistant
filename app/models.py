@@ -9,6 +9,7 @@ class Note(Base):
     __tablename__ = "notes"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    subject: Mapped[str] = mapped_column(String(100))
     title : Mapped[str] = mapped_column(String(200))
     content: Mapped[str] = mapped_column(Text)
     priority: Mapped[int] = mapped_column(Integer)

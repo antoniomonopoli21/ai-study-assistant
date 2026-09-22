@@ -11,16 +11,22 @@ router = APIRouter(
     tags = ["notes"]
 )
 
-@router.post("/", status_code = 201, response_model = NoteResponse)
+@router.post(
+    "/",
+    status_code=201,
+    response_model=NoteResponse
+)
 def create_note(
     note: NoteCreate,
     db: Session = Depends(get_db)
-    ):
+):
     db_note = Note(
-        title =  note.title,
-        content = note.content,
-        priority = note.priority
-    ) 
+        subject=note.subject,
+        title=note.title,
+        content=note.content,
+        priority=note.priority
+    )
+
     db.add(db_note)
     db.commit()
     db.refresh(db_note)
