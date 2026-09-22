@@ -1,9 +1,9 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
-DATABASE_URL = "postgresql+psycopg://localhost/ai_study_assistant"
+from app.config import settings
 
-engine = create_engine(DATABASE_URL)
+engine = create_engine(settings.database_url)
 
 SessionLocal = sessionmaker(
     bind = engine,

@@ -37,7 +37,7 @@ def get_notes(
     return db.query(Note).all()
 
 
-@router.get("//{note_id}", response_model=NoteResponse)
+@router.get("/{note_id}", response_model=NoteResponse)
 def get_note(
     note_id: int,
     db: Session = Depends(get_db)
