@@ -36,11 +36,22 @@ def create_note(
 
     
 
-@router.get("/", response_model = list[NoteResponse])
+@router.get(
+    "/",
+    response_model=list[NoteResponse]
+)
 def get_notes(
+    subject: str | None = None,
     db: Session = Depends(get_db)
 ):
-    return db.query(Note).all()
+    query = db.query(Note)
+
+    if subject is not None:
+        query = query.filter(Note.subject == subject)
+
+    return query.all()
+
+
 
 
 @router.get("/{note_id}", response_model=NoteResponse)

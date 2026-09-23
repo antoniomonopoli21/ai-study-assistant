@@ -161,3 +161,38 @@ def test_create_note_with_blank_subject(client):
     )
 
     assert response.status_code == 422
+
+
+
+def test_filter_notes_by_subject(client):
+    client.post(
+        "/notes/",
+        json={
+            "subject": "Analysis 1",
+            "title": "Improper integrals",
+            "content": "Study convergence criteria",
+            "priority": 2
+        }
+    )
+
+    client.post(
+        "/notes/",
+        json={
+            "subject": "Physics",
+            "title": "Electromagnetic waves",
+            "content": "Review Maxwell equations",
+            "priority": 3
+        }
+    )
+
+    response = client.get(
+        "/notes/",
+        params={"subject": "Analysis 1"}
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data) == 1
+    assert data[0]["subject"] == "Analysis 1"
