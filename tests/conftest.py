@@ -35,3 +35,28 @@ def client():
         yield test_client
 
     Base.metadata.drop_all(bind=test_engine)
+
+
+@pytest.fixture()
+def auth_headers(client):
+    client.post(
+        "/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "password123"
+        }
+    )
+
+    login_response = client.post(
+        "/auth/login",
+        json={
+            "email": "test@example.com",
+            "password": "password123"
+        }
+    )
+
+    token = login_response.json()["access_token"]
+
+    return {
+        "Authorization": f"Bearer {token}"
+    }

@@ -3,8 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.schemas import NoteCreate, NoteResponse
 from app.database import get_db
-from app.models import Note
+from app.models import Note, User
 
+from app.dependencies import get_current_user
 
 router = APIRouter(
     prefix = "/notes",
@@ -18,9 +19,11 @@ router = APIRouter(
 )
 def create_note(
     note: NoteCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
     db_note = Note(
+        user_id=current_user.id,
         subject=note.subject,
         title=note.title,
         content=note.content,
@@ -42,9 +45,12 @@ def create_note(
 )
 def get_notes(
     subject: str | None = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    query = db.query(Note)
+    query = db.query(Note).filter(
+        Note.user_id == current_user.id
+    )
 
     if subject is not None:
         query = query.filter(Note.subject == subject)
@@ -54,12 +60,22 @@ def get_notes(
 
 
 
-@router.get("/{note_id}", response_model=NoteResponse)
+@router.get(
+        "/{note_id}", 
+        response_model=NoteResponse
+)
 def get_note(
     note_id: int,
-    db: Session = Depends(get_db)
-    ):
-    note = db.get(Note, note_id)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    note = (
+        db.query(Note).filter(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+        .first()
+    )
 
     if note is None:
         raise HTTPException(
@@ -70,15 +86,23 @@ def get_note(
 
 
 
-@router.put("/{note_id}",
-            response_model= NoteResponse
-            )
+@router.put(
+        "/{note_id}",
+        response_model= NoteResponse
+)
 def update_note(
     note_id: int, 
     updated_note: NoteCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    note = db.get(Note, note_id)
+    note = (
+        db.query(Note).filter(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+        .first()
+    )
 
     if note is None:
         raise HTTPException(
@@ -86,6 +110,8 @@ def update_note(
             detail = "Note not found"
     )
 
+
+    note.subject = updated_note.subject
     note.title = updated_note.title
     note.content = updated_note.content
     note.priority = updated_note.priority
@@ -95,12 +121,20 @@ def update_note(
 
     return note
 
+
 @router.delete("/{note_id}")
 def delete_note(
     note_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
 ):
-    note = db.get(Note, note_id)
+    note = (
+        db.query(Note).filter(
+            Note.id == note_id,
+            Note.user_id == current_user.id
+        )
+        .first()
+    )
 
     if note is None:
         raise HTTPException(
