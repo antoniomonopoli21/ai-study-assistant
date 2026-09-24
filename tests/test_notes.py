@@ -117,6 +117,8 @@ def test_delete_note(client, auth_headers):
     )
 
     assert get_response.status_code == 404
+    
+    
 
 
 def test_create_note_with_invalid_priority(client, auth_headers):
@@ -344,6 +346,19 @@ def test_user_cannot_update_another_users_note(client):
     )
 
     assert response.status_code == 404
+    owner_response = client.get(
+        f"/notes/{note_id}",
+        headers={"Authorization": f"Bearer {token1}"}
+)
+
+    assert owner_response.status_code == 200
+
+    data = owner_response.json()
+
+    assert data["title"] == "Private note"
+    assert data["content"] == "User 1 content"
+    assert data["subject"] == "Analysis 1"
+    assert data["priority"] == 2
 
 
 def test_user_cannot_delete_another_users_note(client):
@@ -404,3 +419,69 @@ def test_user_cannot_delete_another_users_note(client):
     )
 
     assert response.status_code == 404
+
+    owner_response = client.get(
+        f"/notes/{note_id}",
+    headers={"Authorization": f"Bearer {token1}"}
+)
+
+    assert owner_response.status_code == 200
+
+
+def test_user_cannot_see_another_users_notes_in_collection(client):
+    # User 1
+    client.post(
+        "/auth/register",
+        json={
+            "email": "user1@example.com",
+            "password": "password123"
+        }
+    )
+
+    login1 = client.post(
+        "/auth/login",
+        json={
+            "email": "user1@example.com",
+            "password": "password123"
+        }
+    )
+
+    token1 = login1.json()["access_token"]
+
+    client.post(
+        "/notes/",
+        headers={"Authorization": f"Bearer {token1}"},
+        json={
+            "subject": "Analysis 1",
+            "title": "User 1 private note",
+            "content": "Secret",
+            "priority": 2
+        }
+    )
+
+    # User 2
+    client.post(
+        "/auth/register",
+        json={
+            "email": "user2@example.com",
+            "password": "password123"
+        }
+    )
+
+    login2 = client.post(
+        "/auth/login",
+        json={
+            "email": "user2@example.com",
+            "password": "password123"
+        }
+    )
+
+    token2 = login2.json()["access_token"]
+
+    response = client.get(
+        "/notes/",
+        headers={"Authorization": f"Bearer {token2}"}
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
