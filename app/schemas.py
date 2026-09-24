@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime
 
 class NoteCreate(BaseModel):
@@ -22,13 +22,31 @@ class NoteResponse(NoteCreate):
     model_config = ConfigDict(from_attributes=True)
 
 
-class UserCreate(BaseModel):
-    email: str
-    password: str
+class UserRegister(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value 
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value):
+        if isinstance(value, str):
+            return value.strip().lower()
+        return value 
 
 
 class UserResponse(BaseModel):
     id: int
-    email: str
+    email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
+
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models import User
-from app.schemas import UserCreate, UserResponse
+from app.schemas import UserRegister,UserLogin, UserResponse
 from app.security import hash_password, verify_password, create_access_token
 
 from app.dependencies import get_current_user
@@ -24,28 +26,26 @@ router = APIRouter(
 )
 
 def register_user(
-    user: UserCreate,
+    user: UserRegister,
     db: Session = Depends(get_db)
 ):
-    existing_user = (
-        db.query(User)
-        .filter(User.email == user.email)
-        .first()
-    )
-
-    if existing_user is not None:
-        raise HTTPException(
-            status_code=409,
-            detail="Email already registered"
-        )
-
     db_user = User(
         email=user.email,
         hashed_password = hash_password(user.password)
     )
 
     db.add(db_user)
-    db.commit()
+
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+
+        raise HTTPException(
+            status_code=409,
+            detail="Email already registered"
+        )
+    
     db.refresh(db_user)
 
     return db_user
@@ -53,7 +53,7 @@ def register_user(
 
 @router.post("/login")
 def login_user(
-    user: UserCreate,
+    user: UserLogin,
     db: Session = Depends(get_db)
 ):
     db_user = (
