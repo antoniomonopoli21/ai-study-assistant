@@ -1,3 +1,8 @@
+import jwt
+from app.config import settings
+
+
+
 def test_register_user(client):
     response = client.post(
         "/auth/register",
@@ -74,6 +79,59 @@ def test_get_current_user_with_invalid_token(client):
         "/auth/me",
         headers={
             "Authorization": "Bearer invalid-token"
+        }
+    )
+
+    assert response.status_code == 401
+
+
+def test_token_without_exp_is_rejected(client):
+    client.post(
+        "/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "password123"
+        }
+    )
+
+    token = jwt.encode(
+        {"sub": "1"},
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm
+    )
+
+    response = client.get(
+        "/auth/me",
+        headers={
+            "Authorization": f"Bearer {token}"
+        }
+    )
+
+    assert response.status_code == 401
+
+
+
+def test_token_without_sub_is_rejected(client):
+    client.post(
+        "/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "password123"
+        }
+    )
+
+    token = jwt.encode(
+        {
+            "exp": 4102444800
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm
+    )
+
+    response = client.get(
+        "/auth/me",
+        headers={
+            "Authorization": f"Bearer {token}"
         }
     )
 

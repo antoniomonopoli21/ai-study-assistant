@@ -1,8 +1,10 @@
 import pytest
 
 from fastapi.testclient import TestClient
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import make_url
 
 from app.main import app
 from app.database import Base, get_db
@@ -60,3 +62,21 @@ def auth_headers(client):
     return {
         "Authorization": f"Bearer {token}"
     }
+
+
+def ensure_safe_test_database():
+    test_url = make_url(settings.test_database_url)
+    dev_url = make_url(settings.database_url)
+
+    if test_url == dev_url:
+        raise RuntimeError(
+            "TEST_DATABASE_URL must not point to the development database"
+        )
+
+    if test_url.database is None or "test" not in test_url.database.lower():
+        raise RuntimeError(
+            "Refusing to run tests: database name must clearly be a test database"
+        )
+
+
+ensure_safe_test_database()
