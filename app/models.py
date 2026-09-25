@@ -21,7 +21,8 @@ class Note(Base):
 
     user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
 
 
