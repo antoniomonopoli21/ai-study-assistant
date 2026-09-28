@@ -5,6 +5,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
 
+from pgvector.sqlalchemy import Vector
+
+
 class Note(Base):
     __tablename__ = "notes"
 
@@ -57,4 +60,9 @@ class NoteChunk(Base):
     content: Mapped[str] = mapped_column(
         Text,
         nullable=False
+    )
+
+    embedding: Mapped[list[float] | None] = mapped_column(
+    Vector(384),
+    nullable=True
     )

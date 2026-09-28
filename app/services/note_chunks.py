@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.models import NoteChunk
 from app.services.chunking import chunk_text
 
+from app.services.embeddings import embedding_service
 
 def replace_note_chunks(
     db: Session,
@@ -21,11 +22,16 @@ def replace_note_chunks(
         overlap=overlap
     )
 
-    for index, chunk in enumerate(chunks):
+    embeddings = embedding_service.embed_passages(chunks)
+
+    for index, (chunk, embedding) in enumerate(
+        zip(chunks, embeddings)
+    ):  
         db_chunk = NoteChunk(
             note_id=note_id,
             chunk_index=index,
-            content=chunk
+            content=chunk,
+            embedding=embedding
         )
 
-        db.add(db_chunk)
+    db.add(db_chunk)
