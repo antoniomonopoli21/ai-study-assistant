@@ -7,6 +7,8 @@ from app.models import Note, User
 
 from app.dependencies import get_current_user
 
+from app.services.note_chunks import replace_note_chunks
+
 router = APIRouter(
     prefix = "/notes",
     tags = ["notes"]
@@ -31,6 +33,15 @@ def create_note(
     )
 
     db.add(db_note)
+
+    db.flush()
+
+    replace_note_chunks(
+        db = db,
+        note_id=db_note.id,
+        content= db_note.content
+    )
+
     db.commit()
     db.refresh(db_note)
 
@@ -115,6 +126,12 @@ def update_note(
     note.title = updated_note.title
     note.content = updated_note.content
     note.priority = updated_note.priority
+
+    replace_note_chunks(
+        db = db,
+        note_id = note.id,
+        content = note.content
+    )
 
     db.commit()
     db.refresh(note)

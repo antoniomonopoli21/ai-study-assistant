@@ -40,7 +40,11 @@ class NoteChunk(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     note_id: Mapped[int] = mapped_column(
-        ForeignKey("notes.id"),
+        ForeignKey(
+            "notes.id",
+            ondelete="CASCADE",
+            name="fk_note_chunk_note_id_notes"
+        ),
         nullable=False,
         index=True
     )
