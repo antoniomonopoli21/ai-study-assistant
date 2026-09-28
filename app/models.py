@@ -33,3 +33,24 @@ class User(Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
 
+
+class NoteChunk(Base):
+    __tablename__ = "note_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    note_id: Mapped[int] = mapped_column(
+        ForeignKey("notes.id"),
+        nullable=False,
+        index=True
+    )
+
+    chunk_index: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False
+    )
+
+    content: Mapped[str] = mapped_column(
+        Text,
+        nullable=False
+    )
