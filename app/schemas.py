@@ -50,3 +50,10 @@ class UserResponse(BaseModel):
     email: EmailStr
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class SearchResult(BaseModel):
+    note_id: int
+    chunk_index: int
+    content: str
+    distance: float
