@@ -11,6 +11,11 @@ from app.services.retrieval import search_similar_chunks
 
 from app.config import settings
 
+from app.services.rag import (
+    RAG_INSTRUCTIONS,
+    build_rag_prompt,
+)
+
 router = APIRouter(
     prefix="/ask",
     tags=["rag"]
@@ -57,7 +62,10 @@ def ask_question(
         chunks=chunks
     )
 
-    answer = llm_service.generate(prompt)
+    answer = llm_service.generate(
+    prompt,
+    instructions=RAG_INSTRUCTIONS
+)
 
     sources = [
         AskSource(
