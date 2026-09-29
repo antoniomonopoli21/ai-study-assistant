@@ -7,7 +7,7 @@ class NoteCreate(BaseModel):
     content: str = Field(min_length=1)
     priority: int = Field(ge=1, le=5)
 
-    @field_validator("subject", "title")
+    @field_validator("subject", "title", "content")
     @classmethod
     def validate_title(cls, value: str):
         if not value.strip():

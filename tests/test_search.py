@@ -53,3 +53,70 @@ def test_semantic_search(client, auth_headers):
 
     assert len(data) == 2
     assert "integral" in data[0]["content"].lower()
+
+
+def test_search_does_not_return_another_users_notes(client):
+    # User A
+    client.post(
+        "/auth/register",
+        json={
+            "email": "usera@example.com",
+            "password": "password123"
+        }
+    )
+
+    login_a = client.post(
+        "/auth/login",
+        json={
+            "email": "usera@example.com",
+            "password": "password123"
+        }
+    )
+
+    token_a = login_a.json()["access_token"]
+
+    client.post(
+        "/notes/",
+        headers={"Authorization": f"Bearer {token_a}"},
+        json={
+            "subject": "Private",
+            "title": "Secret",
+            "content": "ZEBRA_SECRET unique confidential content",
+            "priority": 1
+        }
+    )
+
+    # User B
+    client.post(
+        "/auth/register",
+        json={
+            "email": "userb@example.com",
+            "password": "password123"
+        }
+    )
+
+    login_b = client.post(
+        "/auth/login",
+        json={
+            "email": "userb@example.com",
+            "password": "password123"
+        }
+    )
+
+    token_b = login_b.json()["access_token"]
+
+    response = client.get(
+        "/search/",
+        headers={"Authorization": f"Bearer {token_b}"},
+        params={
+            "q": "ZEBRA_SECRET",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 200
+
+    assert all(
+        "ZEBRA_SECRET" not in result["content"]
+        for result in response.json()
+    )

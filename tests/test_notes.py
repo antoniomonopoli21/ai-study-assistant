@@ -485,3 +485,60 @@ def test_user_cannot_see_another_users_notes_in_collection(client):
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_long_note_stores_multiple_chunks(
+
+    client,
+    auth_headers,
+    monkeypatch
+):
+    from app.services.note_chunks import embedding_service
+
+    def fake_embed_passages(texts):
+        return [
+            [0.1] * 384
+            for _ in texts
+        ]
+
+    monkeypatch.setattr(
+        embedding_service,
+        "embed_passages",
+        fake_embed_passages
+    )
+
+    content = " ".join(
+        f"word{i}"
+        for i in range(250)
+    )
+
+    response = client.post(
+        "/notes/",
+        headers=auth_headers,
+        json={
+            "subject": "Test",
+            "title": "Long note",
+            "content": content,
+            "priority": 1
+        }
+    )
+
+    assert response.status_code == 201
+
+
+def test_create_note_with_blank_content(
+    client,
+    auth_headers
+):
+    response = client.post(
+        "/notes/",
+        headers=auth_headers,
+        json={
+            "subject": "Analysis",
+            "title": "Test",
+            "content": "   ",
+            "priority": 2
+        }
+    )
+
+    assert response.status_code == 422

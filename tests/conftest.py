@@ -10,6 +10,12 @@ from app.main import app
 from app.database import Base, get_db
 from app.config import settings
 
+import hashlib
+import math
+import re
+
+from app.services.embeddings import embedding_service
+
 test_engine = create_engine(settings.test_database_url)
 
 TestingSessionLocal = sessionmaker(
@@ -80,3 +86,66 @@ def ensure_safe_test_database():
 
 
 ensure_safe_test_database()
+
+
+@pytest.fixture(autouse=True)
+def fake_embedding_model(monkeypatch):
+    dimension = 384
+
+    def make_embedding(text: str) -> list[float]:
+        vector = [0.0] * dimension
+
+        words = re.findall(
+            r"\w+",
+            text.lower()
+        )
+
+        for word in words:
+            digest = hashlib.sha256(
+                word.encode()
+            ).digest()
+
+            index = int.from_bytes(
+                digest[:4],
+                "big"
+            ) % dimension
+
+            vector[index] += 1.0
+
+        norm = math.sqrt(
+            sum(value * value for value in vector)
+        )
+
+        if norm == 0:
+            return vector
+
+        return [
+            value / norm
+            for value in vector
+        ]
+
+    def fake_embed_query(text: str) -> list[float]:
+        return make_embedding(text)
+
+
+    def fake_embed_passages(
+        texts: list[str]
+    ) -> list[list[float]]:
+        return [
+            make_embedding(text)
+            for text in texts
+        ]
+
+    monkeypatch.setattr(
+        embedding_service,
+        "embed_query",
+        fake_embed_query
+    )
+
+
+
+    monkeypatch.setattr(
+        embedding_service,
+        "embed_passages",
+        fake_embed_passages
+    )
