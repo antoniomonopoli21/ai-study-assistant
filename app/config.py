@@ -12,9 +12,13 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-6-luna"
 
+    rag_max_distance: float = 0.25
+
     model_config = SettingsConfigDict(
         env_file=".env"
     )
 
 
 settings = Settings()
+
+

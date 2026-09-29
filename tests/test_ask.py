@@ -1,12 +1,17 @@
 from app.routers.ask import llm_service
 
-
+from app.routers import ask as ask_router
 
 def test_ask_returns_answer_and_sources(
     client,
     auth_headers,
     monkeypatch
 ):
+    monkeypatch.setattr(
+    ask_router.settings,
+    "rag_max_distance",
+    2.0
+)
     client.post(
         "/notes/",
         headers=auth_headers,
@@ -75,6 +80,11 @@ def test_ask_does_not_use_another_users_notes(
     client,
     monkeypatch
 ):
+    monkeypatch.setattr(
+        ask_router.settings,
+        "rag_max_distance",
+        2.0
+    )
     # User A
     client.post(
         "/auth/register",
@@ -126,7 +136,23 @@ def test_ask_does_not_use_another_users_notes(
         }
     )
 
+
     token_b = login_b.json()["access_token"]
+
+    client.post(
+        "/notes/",
+        headers={"Authorization": f"Bearer {token_b}"},
+        json={
+            "subject": "Public",
+            "title": "User B note",
+            "content": (
+                "A theorem is a mathematical statement "
+                "that can be proved from assumptions."
+            ),
+            "priority": 1
+        }
+    )
+
 
     captured = {}
 
@@ -166,3 +192,57 @@ def test_ask_does_not_use_another_users_notes(
 
     assert "ZEBRA_SECRET" not in context
     assert "12345" not in context
+    assert "mathematical statement" in context
+
+
+
+
+
+def test_ask_does_not_call_llm_without_relevant_context(
+    client,
+    auth_headers,
+    monkeypatch
+):
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit
+    ):
+        return []
+
+    def fail_if_called(prompt: str):
+        raise AssertionError(
+            "LLM should not be called without relevant context"
+        )
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks
+    )
+
+    monkeypatch.setattr(
+        ask_router.llm_service,
+        "generate",
+        fail_if_called
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "How does photosynthesis work?",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert data["sources"] == []
+    assert data["answer"] == (
+        "I don't have enough information in your notes "
+        "to answer that question."
+    )

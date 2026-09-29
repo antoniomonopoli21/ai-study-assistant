@@ -9,6 +9,7 @@ from app.services.llm import llm_service
 from app.services.rag import build_rag_prompt
 from app.services.retrieval import search_similar_chunks
 
+from app.config import settings
 
 router = APIRouter(
     prefix="/ask",
@@ -32,9 +33,23 @@ def ask_question(
         limit=request.limit
     )
 
+    relevant_results = [
+    (chunk, distance)
+    for chunk, distance in results
+    if distance <= settings.rag_max_distance
+]
+    if not relevant_results:
+        return AskResponse(
+            answer=(
+                "I don't have enough information in your notes "
+                "to answer that question."
+            ),
+            sources=[]
+    )
+
     chunks = [
         chunk
-        for chunk, distance in results
+        for chunk, distance in relevant_results
     ]
 
     prompt = build_rag_prompt(
@@ -51,7 +66,7 @@ def ask_question(
             content=chunk.content,
             distance=distance
         )
-        for chunk, distance in results
+        for chunk, distance in relevant_results
     ]
 
     return AskResponse(
