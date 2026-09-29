@@ -57,3 +57,20 @@ class SearchResult(BaseModel):
     chunk_index: int
     content: str
     distance: float
+
+
+class AskRequest(BaseModel):
+    question: str = Field(min_length=1)
+    limit: int = Field(default=3, ge=1, le=10)
+
+
+class AskSource(BaseModel):
+    note_id: int
+    chunk_index: int
+    content: str
+    distance: float
+
+
+class AskResponse(BaseModel):
+    answer: str
+    sources: list[AskSource]

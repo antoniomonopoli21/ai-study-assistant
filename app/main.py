@@ -4,6 +4,7 @@ from app.routers.notes import router as notes_router
 from app.routers.auth import router as auth_router
 
 from app.routers import search
+from app.routers import ask
 
 
 app = FastAPI()
@@ -11,6 +12,8 @@ app = FastAPI()
 app.include_router(notes_router)
 app.include_router(auth_router)
 app.include_router(search.router)
+app.include_router(ask.router)
+
 
 @app.get("/")
 def root():
