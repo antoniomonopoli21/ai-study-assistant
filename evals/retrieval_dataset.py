@@ -180,4 +180,52 @@ EVAL_CASES = [
         "question": "How do neural networks perform backpropagation?",
         "expected_id": None,
     },
+    {
+        "question": (
+        "How does integration by parts work?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "Come si calcola la quantità di moto di un corpo?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "What is the SQL HAVING clause used for?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "Come funziona l'algoritmo quicksort?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "What does Bayes' theorem state?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "Quando una matrice è diagonalizzabile?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "How does a fully associative cache work?"
+        ),
+        "expected_id": None,
+    },
+    {
+        "question": (
+            "What is the second derivative used for?"
+        ),
+        "expected_id": None,
+    },
 ]
