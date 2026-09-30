@@ -6,6 +6,13 @@ from app.services.llm import LLMServiceError
 
 from app.services.embeddings import EmbeddingServiceError
 
+from types import SimpleNamespace
+
+from app.services.reranker import (
+    RerankerServiceError,
+    reranker_service,
+)
+
 def test_ask_returns_answer_and_sources(
     client,
     auth_headers,
@@ -452,3 +459,243 @@ def test_ask_rejects_too_long_question(
     )
 
     assert response.status_code == 422
+
+
+def test_ask_uses_reranker_order(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    first_chunk = SimpleNamespace(
+        note_id=1,
+        chunk_index=0,
+        content="First retrieved chunk",
+    )
+
+    second_chunk = SimpleNamespace(
+        note_id=2,
+        chunk_index=0,
+        content="Second retrieved chunk",
+    )
+
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit,
+    ):
+        return [
+            (first_chunk, 0.10),
+            (second_chunk, 0.20),
+        ]
+
+    def fake_rerank(
+        query,
+        candidates,
+    ):
+        return [
+            (
+                second_chunk,
+                0.20,
+                5.0,
+            ),
+            (
+                first_chunk,
+                0.10,
+                4.0,
+            ),
+        ]
+
+    captured = {}
+
+    def fake_generate(
+        prompt: str,
+        instructions: str | None = None,
+    ) -> str:
+        captured["prompt"] = prompt
+        return "Mocked answer"
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "rerank",
+        fake_rerank,
+    )
+
+    monkeypatch.setattr(
+        llm_service,
+        "generate",
+        fake_generate,
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "Test question",
+            "limit": 1,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["sources"]) == 1
+
+    assert (
+        data["sources"][0]["content"]
+        == "Second retrieved chunk"
+    )
+
+    assert (
+        "Second retrieved chunk"
+        in captured["prompt"]
+    )
+
+    assert (
+        "First retrieved chunk"
+        not in captured["prompt"]
+    )
+
+def test_ask_does_not_call_llm_when_reranker_rejects_context(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    chunk = SimpleNamespace(
+        note_id=1,
+        chunk_index=0,
+        content="Semantically related but insufficient context",
+    )
+
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit,
+    ):
+        return [
+            (chunk, 0.10),
+        ]
+
+    def fake_rerank(
+        query,
+        candidates,
+    ):
+        return [
+            (
+                chunk,
+                0.10,
+                0.4,
+            ),
+        ]
+
+    def fail_if_called(
+        prompt: str,
+        instructions: str | None = None,
+    ):
+        raise AssertionError(
+            "LLM should not be called when "
+            "the reranker rejects the context"
+        )
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "rerank",
+        fake_rerank,
+    )
+
+    monkeypatch.setattr(
+        ask_router.llm_service,
+        "generate",
+        fail_if_called,
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "Test question",
+            "limit": 3,
+        },
+    )
+
+    assert response.status_code == 200
+
+    assert response.json() == {
+        "answer": (
+            "I don't have enough information in your notes "
+            "to answer that question."
+        ),
+        "sources": [],
+    }
+
+def test_ask_returns_503_when_reranker_fails(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    chunk = SimpleNamespace(
+        note_id=1,
+        chunk_index=0,
+        content="Retrieved context",
+    )
+
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit,
+    ):
+        return [
+            (chunk, 0.10),
+        ]
+
+    def fake_rerank(
+        query,
+        candidates,
+    ):
+        raise RerankerServiceError(
+            "simulated reranker failure"
+        )
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "rerank",
+        fake_rerank,
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "Test question",
+            "limit": 3,
+        },
+    )
+
+    assert response.status_code == 503
+
+    assert response.json() == {
+        "detail": (
+            "Reranker service temporarily unavailable"
+        )
+    }

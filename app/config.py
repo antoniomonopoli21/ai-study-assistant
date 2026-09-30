@@ -14,6 +14,12 @@ class Settings(BaseSettings):
 
     rag_max_distance: float = 0.25
 
+    reranker_model: str = (
+        "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    )
+    reranker_threshold: float = 0.5
+    reranker_top_k: int = 5
+
     model_config = SettingsConfigDict(
         env_file=".env"
     )

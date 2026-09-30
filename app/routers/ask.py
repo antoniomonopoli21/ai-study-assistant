@@ -9,6 +9,10 @@ from app.schemas import AskRequest, AskResponse, AskSource
 from app.services.embeddings import EmbeddingServiceError
 from app.services.llm import LLMServiceError, llm_service
 from app.services.rag import RAG_INSTRUCTIONS, build_rag_prompt
+from app.services.reranker import (
+    RerankerServiceError,
+    reranker_service,
+)
 from app.services.retrieval import search_similar_chunks
 
 
@@ -27,53 +31,81 @@ def ask_question(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
+    candidate_limit = max(
+        request.limit,
+        settings.reranker_top_k,
+    )
+
     try:
         results = search_similar_chunks(
             db=db,
             user_id=current_user.id,
             query=request.question,
-            limit=request.limit
+            limit=candidate_limit,
         )
     except EmbeddingServiceError:
         raise HTTPException(
             status_code=503,
-            detail="Embedding service temporarily unavailable"
+            detail="Embedding service temporarily unavailable",
         )
 
-    relevant_results = [
-        (chunk, distance)
-        for chunk, distance in results
-        if distance <= settings.rag_max_distance
-    ]
-
-    if not relevant_results:
+    if not results:
         return AskResponse(
             answer=(
                 "I don't have enough information in your notes "
                 "to answer that question."
             ),
-            sources=[]
+            sources=[],
         )
+
+    try:
+        reranked_results = reranker_service.rerank(
+            query=request.question,
+            candidates=results,
+        )
+    except RerankerServiceError:
+        raise HTTPException(
+            status_code=503,
+            detail="Reranker service temporarily unavailable",
+        )
+
+    if (
+        not reranked_results
+        or reranked_results[0][2]
+        < settings.reranker_threshold
+    ):
+        return AskResponse(
+            answer=(
+                "I don't have enough information in your notes "
+                "to answer that question."
+            ),
+            sources=[],
+        )
+
+    selected_results = reranked_results[
+        :request.limit
+    ]
 
     chunks = [
         chunk
-        for chunk, distance in relevant_results
+        for chunk, distance, reranker_score
+        in selected_results
     ]
 
     prompt = build_rag_prompt(
         question=request.question,
-        chunks=chunks
+        chunks=chunks,
     )
 
     try:
         answer = llm_service.generate(
             prompt,
-            instructions=RAG_INSTRUCTIONS
+            instructions=RAG_INSTRUCTIONS,
         )
     except LLMServiceError:
         raise HTTPException(
             status_code=503,
-            detail="AI service temporarily unavailable"
+            detail="AI service temporarily unavailable",
         )
 
     sources = [
@@ -81,12 +113,16 @@ def ask_question(
             note_id=chunk.note_id,
             chunk_index=chunk.chunk_index,
             content=chunk.content,
-            distance=distance
+            distance=distance,
         )
-        for chunk, distance in relevant_results
+        for (
+            chunk,
+            distance,
+            reranker_score,
+        ) in selected_results
     ]
 
     return AskResponse(
         answer=answer,
-        sources=sources
+        sources=sources,
     )

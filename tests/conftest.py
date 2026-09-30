@@ -15,6 +15,7 @@ import math
 import re
 
 from app.services.embeddings import embedding_service
+from app.services.reranker import reranker_service
 
 test_engine = create_engine(settings.test_database_url)
 
@@ -148,4 +149,26 @@ def fake_embedding_model(monkeypatch):
         embedding_service,
         "embed_passages",
         fake_embed_passages
+    )
+
+
+@pytest.fixture(autouse=True)
+def fake_reranker_model(monkeypatch):
+    def fake_rerank(
+        query,
+        candidates,
+    ):
+        return [
+            (
+                chunk,
+                distance,
+                10.0,
+            )
+            for chunk, distance in candidates
+        ]
+
+    monkeypatch.setattr(
+        reranker_service,
+        "rerank",
+        fake_rerank,
     )
