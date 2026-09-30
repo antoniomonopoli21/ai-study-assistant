@@ -1,53 +1,9 @@
-from app.services.embeddings import embedding_service
-
-
-DOCUMENTS = [
-    {
-        "id": "integrals",
-        "text": (
-            "An improper integral converges when the limit "
-            "that defines the integral exists and is finite."
-        ),
-    },
-    {
-        "id": "newton",
-        "text": (
-            "Newton's second law states that force equals "
-            "mass multiplied by acceleration."
-        ),
-    },
-    {
-        "id": "sql",
-        "text": (
-            "A SQL join combines rows from two or more tables "
-            "according to a related column."
-        ),
-    },
-]
-
-
-EVAL_CASES = [
-    {
-        "question": (
-            "When does an integral with an infinite endpoint converge?"
-        ),
-        "expected_id": "integrals",
-    },
-    {
-        "question": (
-            "What relationship connects force, mass and acceleration?"
-        ),
-        "expected_id": "newton",
-    },
-    {
-        "question": (
-            "How can I combine rows from different database tables?"
-        ),
-        "expected_id": "sql",
-    },
-]
-
 import numpy as np
+
+from app.config import settings
+from app.services.embeddings import embedding_service
+from evals.retrieval_dataset import DOCUMENTS, EVAL_CASES
+
 
 def cosine_similarity(
     vector_a: list[float],
@@ -56,6 +12,7 @@ def cosine_similarity(
     return float(
         np.dot(vector_a, vector_b)
     )
+
 
 def embed_documents():
     texts = [
@@ -78,8 +35,14 @@ def embed_documents():
 def evaluate():
     document_embeddings = embed_documents()
 
+    answerable_cases = 0
     hit_at_1 = 0
     hit_at_3 = 0
+
+    no_answer_cases = 0
+    correct_rejections = 0
+
+    threshold_correct = 0
 
     for case in EVAL_CASES:
         query_embedding = embedding_service.embed_query(
@@ -89,13 +52,13 @@ def evaluate():
         scored_documents = []
 
         for document in DOCUMENTS:
-            score = cosine_similarity(
+            similarity = cosine_similarity(
                 query_embedding,
                 document_embeddings[document["id"]],
             )
 
             scored_documents.append(
-                (document["id"], score)
+                (document["id"], similarity)
             )
 
         scored_documents.sort(
@@ -105,39 +68,92 @@ def evaluate():
 
         ranking = [
             document_id
-            for document_id, score in scored_documents
+            for document_id, similarity in scored_documents
         ]
 
+        best_id, best_similarity = scored_documents[0]
+
+        best_distance = 1.0 - best_similarity
+
+        predicted_has_answer = (
+            best_distance <= settings.rag_max_distance
+        )
+
         expected_id = case["expected_id"]
+        expected_has_answer = expected_id is not None
 
-        if expected_id in ranking[:1]:
-            hit_at_1 += 1
+        if predicted_has_answer == expected_has_answer:
+            threshold_correct += 1
 
-        if expected_id in ranking[:3]:
-            hit_at_3 += 1
+        if expected_has_answer:
+            answerable_cases += 1
+
+            if expected_id in ranking[:1]:
+                hit_at_1 += 1
+
+            if expected_id in ranking[:3]:
+                hit_at_3 += 1
+
+        else:
+            no_answer_cases += 1
+
+            if not predicted_has_answer:
+                correct_rejections += 1
 
         print()
         print(f"Question: {case['question']}")
         print(f"Expected: {expected_id}")
-        print("Ranking:")
+        print(f"Best result: {best_id}")
+        print(f"Best similarity: {best_similarity:.4f}")
+        print(f"Best distance: {best_distance:.4f}")
+        print(
+            "Threshold decision: "
+            + (
+                "ANSWER"
+                if predicted_has_answer
+                else "NO ANSWER"
+            )
+        )
 
-        for document_id, score in scored_documents:
+        print("Top 3:")
+
+        for document_id, similarity in scored_documents[:3]:
             print(
-                f"  {document_id}: {score:.4f}"
+                f"  {document_id}: {similarity:.4f}"
             )
 
-    total = len(EVAL_CASES)
+    total_cases = len(EVAL_CASES)
 
     print()
     print("=== Retrieval Evaluation ===")
+
     print(
-        f"Hit@1: {hit_at_1}/{total} "
-        f"= {hit_at_1 / total:.2%}"
+        f"Hit@1: {hit_at_1}/{answerable_cases} "
+        f"= {hit_at_1 / answerable_cases:.2%}"
     )
+
     print(
-        f"Hit@3: {hit_at_3}/{total} "
-        f"= {hit_at_3 / total:.2%}"
+        f"Hit@3: {hit_at_3}/{answerable_cases} "
+        f"= {hit_at_3 / answerable_cases:.2%}"
     )
+
+    print(
+        f"No-answer rejection: "
+        f"{correct_rejections}/{no_answer_cases} "
+        f"= {correct_rejections / no_answer_cases:.2%}"
+    )
+
+    print(
+        f"Threshold accuracy: "
+        f"{threshold_correct}/{total_cases} "
+        f"= {threshold_correct / total_cases:.2%}"
+    )
+
+    print(
+        f"RAG max distance: "
+        f"{settings.rag_max_distance}"
+    )
+
 
 if __name__ == "__main__":
     evaluate()
