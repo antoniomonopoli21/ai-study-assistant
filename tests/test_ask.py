@@ -422,3 +422,33 @@ def test_ask_returns_503_when_embedding_fails(
     assert response.json() == {
         "detail": "Embedding service temporarily unavailable"
     }
+
+def test_ask_rejects_blank_question(
+    client,
+    auth_headers
+):
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "   ",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 422
+
+def test_ask_rejects_too_long_question(
+    client,
+    auth_headers
+):
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "a" * 1001,
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 422

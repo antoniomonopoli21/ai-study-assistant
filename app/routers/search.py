@@ -20,11 +20,22 @@ router = APIRouter(
     response_model=list[SearchResult]
 )
 def semantic_search(
-    q: str = Query(min_length=1),
+    q: str = Query(
+        min_length = 1,
+        max_length = 1000
+    ),
     limit: int = Query(default=3, ge=1, le=10),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+):  
+    q = q.strip()
+
+    if not q:
+        raise HTTPException(
+            status_code = 422,
+            detail = "Search query cannot be empty"
+        )
+    
     try:
         results = search_similar_chunks(
             db=db,

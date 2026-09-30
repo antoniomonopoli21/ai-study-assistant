@@ -1,19 +1,28 @@
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 from datetime import datetime
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+)
+
 
 class NoteCreate(BaseModel):
     subject: str = Field(min_length=1, max_length=100)
     title: str = Field(min_length=1, max_length=200)
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=50_000)
     priority: int = Field(ge=1, le=5)
 
     @field_validator("subject", "title", "content")
     @classmethod
-    def validate_title(cls, value: str):
+    def validate_not_blank(cls, value: str):
         if not value.strip():
             raise ValueError("Field cannot be empty")
 
-        return value
+        return value.strip()
+
 
 class NoteResponse(NoteCreate):
     id: int
@@ -31,7 +40,9 @@ class UserRegister(BaseModel):
     def normalize_email(cls, value):
         if isinstance(value, str):
             return value.strip().lower()
-        return value 
+
+        return value
+
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -42,7 +53,8 @@ class UserLogin(BaseModel):
     def normalize_email(cls, value):
         if isinstance(value, str):
             return value.strip().lower()
-        return value 
+
+        return value
 
 
 class UserResponse(BaseModel):
@@ -60,8 +72,19 @@ class SearchResult(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1)
+    question: str = Field(
+        min_length=1,
+        max_length=1_000
+    )
     limit: int = Field(default=3, ge=1, le=10)
+
+    @field_validator("question")
+    @classmethod
+    def validate_question(cls, value: str):
+        if not value.strip():
+            raise ValueError("Question cannot be empty")
+
+        return value.strip()
 
 
 class AskSource(BaseModel):

@@ -542,3 +542,21 @@ def test_create_note_with_blank_content(
     )
 
     assert response.status_code == 422
+
+
+def test_create_note_with_too_long_content(
+    client,
+    auth_headers
+):
+    response = client.post(
+        "/notes/",
+        headers=auth_headers,
+        json={
+            "subject": "Analysis",
+            "title": "Very long note",
+            "content": "a" * 50_001,
+            "priority": 2
+        }
+    )
+
+    assert response.status_code == 422

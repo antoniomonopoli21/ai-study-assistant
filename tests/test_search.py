@@ -161,3 +161,31 @@ def test_search_returns_503_when_embedding_fails(
     assert response.json() == {
         "detail": "Embedding service temporarily unavailable"
     }
+
+def test_search_rejects_blank_query(
+    client,
+    auth_headers
+):
+    response = client.get(
+        "/search/",
+        headers=auth_headers,
+        params={
+            "q": "   "
+        }
+    )
+
+    assert response.status_code == 422
+
+def test_search_rejects_too_long_query(
+    client,
+    auth_headers
+):
+    response = client.get(
+        "/search/",
+        headers=auth_headers,
+        params={
+            "q": "a" * 1001
+        }
+    )
+
+    assert response.status_code == 422
