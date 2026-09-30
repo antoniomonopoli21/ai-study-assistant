@@ -621,6 +621,7 @@ def test_ask_does_not_call_llm_when_reranker_rejects_context(
     }
 
 def test_ask_returns_503_when_reranker_fails(
+    
     client,
     auth_headers,
     monkeypatch,
@@ -677,3 +678,96 @@ def test_ask_returns_503_when_reranker_fails(
             "Reranker service temporarily unavailable"
         )
     }
+
+def test_ask_excludes_reranker_results_below_threshold(
+    client,
+    auth_headers,
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    good_chunk = SimpleNamespace(
+        note_id=1,
+        chunk_index=0,
+        content="Relevant context",
+    )
+
+    bad_chunk = SimpleNamespace(
+        note_id=2,
+        chunk_index=0,
+        content="Irrelevant context",
+    )
+
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit,
+    ):
+        return [
+            (good_chunk, 0.10),
+            (bad_chunk, 0.11),
+        ]
+
+    def fake_rerank(
+        query,
+        candidates,
+    ):
+        return [
+            (
+                good_chunk,
+                0.10,
+                5.0,
+            ),
+            (
+                bad_chunk,
+                0.11,
+                -4.0,
+            ),
+        ]
+
+    captured = {}
+
+    def fake_generate(
+        prompt: str,
+        instructions: str | None = None,
+    ) -> str:
+        captured["prompt"] = prompt
+        return "Mocked answer"
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "rerank",
+        fake_rerank,
+    )
+
+    monkeypatch.setattr(
+        llm_service,
+        "generate",
+        fake_generate,
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "Test question",
+            "limit": 3,
+        },
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+
+    assert len(data["sources"]) == 1
+    assert data["sources"][0]["content"] == "Relevant context"
+
+    assert "Relevant context" in captured["prompt"]
+    assert "Irrelevant context" not in captured["prompt"]

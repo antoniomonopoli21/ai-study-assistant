@@ -1,7 +1,14 @@
+import logging
+import math
+from threading import Lock
+
 from sentence_transformers import CrossEncoder
 
 from app.config import settings
 from app.models import NoteChunk
+
+
+logger = logging.getLogger(__name__)
 
 
 class RerankerServiceError(Exception):
@@ -10,13 +17,18 @@ class RerankerServiceError(Exception):
 
 class RerankerService:
     def __init__(self):
-        self._model = None
+        self._model: CrossEncoder | None = None
+
+        self._model_lock = Lock()
+        self._predict_lock = Lock()
 
     def _get_model(self) -> CrossEncoder:
         if self._model is None:
-            self._model = CrossEncoder(
-                settings.reranker_model
-            )
+            with self._model_lock:
+                if self._model is None:
+                    self._model = CrossEncoder(
+                        settings.reranker_model
+                    )
 
         return self._model
 
@@ -28,24 +40,44 @@ class RerankerService:
         if not candidates:
             return []
 
+        pairs = [
+            (
+                query,
+                chunk.content,
+            )
+            for chunk, distance in candidates
+        ]
+
         try:
             model = self._get_model()
 
-            pairs = [
-                (
-                    query,
-                    chunk.content,
+            with self._predict_lock:
+                raw_scores = model.predict(pairs)
+
+            if len(raw_scores) != len(candidates):
+                raise ValueError(
+                    "Reranker score count does not match "
+                    "candidate count"
                 )
-                for chunk, distance in candidates
+
+            scores = [
+                float(score)
+                for score in raw_scores
             ]
 
-            scores = model.predict(pairs)
+            if not all(
+                math.isfinite(score)
+                for score in scores
+            ):
+                raise ValueError(
+                    "Reranker returned a non-finite score"
+                )
 
             reranked_results = [
                 (
                     chunk,
                     distance,
-                    float(score),
+                    score,
                 )
                 for (
                     chunk,
@@ -65,6 +97,10 @@ class RerankerService:
             return reranked_results
 
         except Exception as exc:
+            logger.exception(
+                "Reranker inference failed"
+            )
+
             raise RerankerServiceError(
                 "Reranker inference failed"
             ) from exc

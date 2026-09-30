@@ -1,3 +1,4 @@
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,11 +15,21 @@ class Settings(BaseSettings):
 
     rag_max_distance: float = 0.25
 
-    reranker_model: str = (
-        "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    reranker_model: str = Field(
+        default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
+        min_length=1,
     )
-    reranker_threshold: float = 0.5
-    reranker_top_k: int = 5
+
+    reranker_threshold: float = Field(
+        default=0.5,
+        allow_inf_nan=False,
+    )
+
+    reranker_candidate_k: int = Field(
+        default=5,
+        ge=1,
+        le=20,
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env"

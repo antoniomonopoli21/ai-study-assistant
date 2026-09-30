@@ -23,7 +23,10 @@ def search_similar_chunks(
             Note.user_id == user_id,
             NoteChunk.embedding.is_not(None)
         )
-        .order_by(distance)
+        .order_by(
+            distance,
+            NoteChunk.id
+        )
         .limit(limit)
         .all()
     )

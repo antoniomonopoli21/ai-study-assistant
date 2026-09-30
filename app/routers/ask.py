@@ -33,7 +33,7 @@ def ask_question(
 ):
     candidate_limit = max(
         request.limit,
-        settings.reranker_top_k,
+        settings.reranker_candidate_k,
     )
 
     try:
@@ -69,11 +69,17 @@ def ask_question(
             detail="Reranker service temporarily unavailable",
         )
 
-    if (
-        not reranked_results
-        or reranked_results[0][2]
-        < settings.reranker_threshold
-    ):
+    relevant_results = [
+        result
+        for result in reranked_results
+        if result[2] >= settings.reranker_threshold
+    ]
+
+    selected_results = relevant_results[
+        :request.limit
+    ]
+
+    if not selected_results:
         return AskResponse(
             answer=(
                 "I don't have enough information in your notes "
@@ -81,10 +87,6 @@ def ask_question(
             ),
             sources=[],
         )
-
-    selected_results = reranked_results[
-        :request.limit
-    ]
 
     chunks = [
         chunk
