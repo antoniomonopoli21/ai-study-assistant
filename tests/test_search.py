@@ -1,3 +1,7 @@
+from app.routers import search as search_router
+from app.services.embeddings import EmbeddingServiceError
+
+
 def test_search_requires_authentication(client):
     response = client.get(
         "/search/",
@@ -120,3 +124,40 @@ def test_search_does_not_return_another_users_notes(client):
         "ZEBRA_SECRET" not in result["content"]
         for result in response.json()
     )
+
+
+def test_search_returns_503_when_embedding_fails(
+    client,
+    auth_headers,
+    monkeypatch
+):
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit
+    ):
+        raise EmbeddingServiceError(
+            "simulated embedding failure"
+        )
+
+    monkeypatch.setattr(
+        search_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks
+    )
+
+    response = client.get(
+        "/search/",
+        headers=auth_headers,
+        params={
+            "q": "improper integral",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 503
+
+    assert response.json() == {
+        "detail": "Embedding service temporarily unavailable"
+    }

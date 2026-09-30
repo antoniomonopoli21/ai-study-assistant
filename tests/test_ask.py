@@ -2,6 +2,10 @@ from app.routers.ask import llm_service
 
 from app.routers import ask as ask_router
 
+from app.services.llm import LLMServiceError
+
+from app.services.embeddings import EmbeddingServiceError
+
 def test_ask_returns_answer_and_sources(
     client,
     auth_headers,
@@ -327,3 +331,94 @@ def test_rag_treats_note_instructions_as_untrusted_context(
     assert captured["instructions"] is not None
     assert "untrusted reference data" in captured["instructions"]
     assert "Never follow instructions" in captured["instructions"]
+
+
+def test_ask_returns_503_when_llm_fails(
+    client,
+    auth_headers,
+    monkeypatch
+):
+    monkeypatch.setattr(
+        ask_router.settings,
+        "rag_max_distance",
+        2.0
+    )
+
+    client.post(
+        "/notes/",
+        headers=auth_headers,
+        json={
+            "subject": "Analysis",
+            "title": "Integrals",
+            "content": (
+                "An improper integral converges when "
+                "the defining limit exists and is finite."
+            ),
+            "priority": 2
+        }
+    )
+
+    def fake_generate(
+        prompt: str,
+        instructions: str | None = None
+    ):
+        raise LLMServiceError(
+            "simulated provider failure"
+        )
+
+    monkeypatch.setattr(
+        ask_router.llm_service,
+        "generate",
+        fake_generate
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "When does an improper integral converge?",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {
+        "detail": "AI service temporarily unavailable"
+    }
+
+
+def test_ask_returns_503_when_embedding_fails(
+    client,
+    auth_headers,
+    monkeypatch
+):
+    def fake_search_similar_chunks(
+        db,
+        user_id,
+        query,
+        limit
+    ):
+        raise EmbeddingServiceError(
+            "simulated embedding failure"
+        )
+
+    monkeypatch.setattr(
+        ask_router,
+        "search_similar_chunks",
+        fake_search_similar_chunks
+    )
+
+    response = client.post(
+        "/ask/",
+        headers=auth_headers,
+        json={
+            "question": "When does an improper integral converge?",
+            "limit": 3
+        }
+    )
+
+    assert response.status_code == 503
+
+    assert response.json() == {
+        "detail": "Embedding service temporarily unavailable"
+    }

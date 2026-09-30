@@ -1,20 +1,16 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import AskRequest, AskResponse, AskSource
-from app.services.llm import llm_service
-from app.services.rag import build_rag_prompt
+from app.services.embeddings import EmbeddingServiceError
+from app.services.llm import LLMServiceError, llm_service
+from app.services.rag import RAG_INSTRUCTIONS, build_rag_prompt
 from app.services.retrieval import search_similar_chunks
 
-from app.config import settings
-
-from app.services.rag import (
-    RAG_INSTRUCTIONS,
-    build_rag_prompt,
-)
 
 router = APIRouter(
     prefix="/ask",
@@ -31,18 +27,25 @@ def ask_question(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    results = search_similar_chunks(
-        db=db,
-        user_id=current_user.id,
-        query=request.question,
-        limit=request.limit
-    )
+    try:
+        results = search_similar_chunks(
+            db=db,
+            user_id=current_user.id,
+            query=request.question,
+            limit=request.limit
+        )
+    except EmbeddingServiceError:
+        raise HTTPException(
+            status_code=503,
+            detail="Embedding service temporarily unavailable"
+        )
 
     relevant_results = [
-    (chunk, distance)
-    for chunk, distance in results
-    if distance <= settings.rag_max_distance
-]
+        (chunk, distance)
+        for chunk, distance in results
+        if distance <= settings.rag_max_distance
+    ]
+
     if not relevant_results:
         return AskResponse(
             answer=(
@@ -50,7 +53,7 @@ def ask_question(
                 "to answer that question."
             ),
             sources=[]
-    )
+        )
 
     chunks = [
         chunk
@@ -62,10 +65,16 @@ def ask_question(
         chunks=chunks
     )
 
-    answer = llm_service.generate(
-    prompt,
-    instructions=RAG_INSTRUCTIONS
-)
+    try:
+        answer = llm_service.generate(
+            prompt,
+            instructions=RAG_INSTRUCTIONS
+        )
+    except LLMServiceError:
+        raise HTTPException(
+            status_code=503,
+            detail="AI service temporarily unavailable"
+        )
 
     sources = [
         AskSource(

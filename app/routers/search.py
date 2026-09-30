@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models import User
 from app.schemas import SearchResult
+from app.services.embeddings import EmbeddingServiceError
 from app.services.retrieval import search_similar_chunks
 
 
@@ -24,12 +25,18 @@ def semantic_search(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    results = search_similar_chunks(
-        db=db,
-        user_id=current_user.id,
-        query=q,
-        limit=limit
-    )
+    try:
+        results = search_similar_chunks(
+            db=db,
+            user_id=current_user.id,
+            query=q,
+            limit=limit
+        )
+    except EmbeddingServiceError:
+        raise HTTPException(
+            status_code=503,
+            detail="Embedding service temporarily unavailable"
+        )
 
     return [
         SearchResult(
