@@ -4,6 +4,15 @@ from app.config import settings
 from app.services.embeddings import embedding_service
 from evals.retrieval_dataset import DOCUMENTS, EVAL_CASES
 
+THRESHOLDS = [
+    0.15,
+    0.18,
+    0.20,
+    0.22,
+    0.25,
+    0.28,
+    0.30,
+]
 
 def cosine_similarity(
     vector_a: list[float],
@@ -34,6 +43,15 @@ def embed_documents():
 
 def evaluate():
     document_embeddings = embed_documents()
+
+    threshold_results = {
+        threshold: {
+            "correct": 0,
+            "answerable_correct": 0,
+            "no_answer_correct": 0,
+        }
+        for threshold in THRESHOLDS
+}
 
     answerable_cases = 0
     hit_at_1 = 0
@@ -75,12 +93,36 @@ def evaluate():
 
         best_distance = 1.0 - best_similarity
 
+        second_best_similarity = scored_documents[1][1]
+
+        margin = (
+            best_similarity
+            - second_best_similarity
+        )
+
         predicted_has_answer = (
             best_distance <= settings.rag_max_distance
         )
 
         expected_id = case["expected_id"]
         expected_has_answer = expected_id is not None
+
+        for threshold in THRESHOLDS:
+            threshold_predicts_answer = (
+            best_distance <= threshold
+            )
+
+            if threshold_predicts_answer == expected_has_answer:
+                threshold_results[threshold]["correct"] += 1
+
+                if expected_has_answer:
+                    threshold_results[threshold][
+                        "answerable_correct"
+                    ] += 1
+                else:
+                    threshold_results[threshold][
+                        "no_answer_correct"
+                    ] += 1
 
         if predicted_has_answer == expected_has_answer:
             threshold_correct += 1
@@ -106,6 +148,7 @@ def evaluate():
         print(f"Best result: {best_id}")
         print(f"Best similarity: {best_similarity:.4f}")
         print(f"Best distance: {best_distance:.4f}")
+        print(f"Top1-Top2 margin: {margin:.4f}")
         print(
             "Threshold decision: "
             + (
@@ -154,6 +197,33 @@ def evaluate():
         f"{settings.rag_max_distance}"
     )
 
+    print()
+    print("=== Threshold Comparison ===")
+
+    for threshold in THRESHOLDS:
+        result = threshold_results[threshold]
+
+        accuracy = (
+            result["correct"]
+            / total_cases
+        )
+
+        answerable_accuracy = (
+            result["answerable_correct"]
+            / answerable_cases
+        )
+
+        no_answer_accuracy = (
+            result["no_answer_correct"]
+            / no_answer_cases
+        )
+
+        print(
+            f"threshold={threshold:.2f} | "
+            f"overall={accuracy:.2%} | "
+            f"answerable={answerable_accuracy:.2%} | "
+            f"no-answer={no_answer_accuracy:.2%}"
+        )
 
 if __name__ == "__main__":
     evaluate()
