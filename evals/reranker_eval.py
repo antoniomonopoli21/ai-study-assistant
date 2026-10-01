@@ -1,15 +1,14 @@
-import numpy as np
-from sentence_transformers import CrossEncoder
+from types import SimpleNamespace
 
+import numpy as np
+
+from app.config import settings
 from app.services.embeddings import embedding_service
+from app.services.reranker import reranker_service
 from evals.retrieval_dataset import DOCUMENTS, EVAL_CASES
 
 
-RERANKER_MODEL = (
-    "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
-)
-
-TOP_K = 5
+EVAL_REQUEST_LIMIT = 3
 
 RERANKER_THRESHOLDS = [
     -3.0,
@@ -54,27 +53,67 @@ def evaluate():
         )
     }
 
-    documents_by_id = {
-        document["id"]: document
-        for document in DOCUMENTS
+    chunks_by_id = {
+        document["id"]: SimpleNamespace(
+            id=index,
+            note_id=index,
+            chunk_index=0,
+            content=document["text"],
+            eval_id=document["id"],
+        )
+        for index, document in enumerate(
+            DOCUMENTS,
+            start=1,
+        )
     }
 
-    print("Loading reranker...")
+    candidate_limit = max(
+        EVAL_REQUEST_LIMIT,
+        settings.reranker_candidate_k,
+    )
 
-    reranker = CrossEncoder(
-        RERANKER_MODEL
+    print()
+    print("=== Production Configuration ===")
+    print(
+        f"Reranker model: "
+        f"{settings.reranker_model}"
+    )
+    print(
+        f"Reranker threshold: "
+        f"{settings.reranker_threshold}"
+    )
+    print(
+        f"Candidate K: "
+        f"{settings.reranker_candidate_k}"
+    )
+    print(
+        f"Evaluation request limit: "
+        f"{EVAL_REQUEST_LIMIT}"
+    )
+    print(
+        f"Effective candidate limit: "
+        f"{candidate_limit}"
     )
 
     retrieval_hit_at_1 = 0
     reranker_hit_at_1 = 0
+    selected_hit_at_1 = 0
+
     answerable_cases = 0
+    answerable_accepted = 0
+
+    no_answer_cases = 0
+    correct_rejections = 0
+
+    answerability_correct = 0
+    pipeline_correct = 0
 
     positive_scores = []
     negative_scores = []
-    
 
     positive_examples = []
     negative_examples = []
+
     answerability_examples = []
 
     for case in EVAL_CASES:
@@ -97,65 +136,167 @@ def evaluate():
                 ],
             )
 
+            distance = 1.0 - similarity
+
             retrieval_results.append(
                 (
                     document["id"],
+                    distance,
                     similarity,
                 )
             )
 
         retrieval_results.sort(
-            key=lambda item: item[1],
-            reverse=True,
-        )
-
-        candidates = retrieval_results[
-            :TOP_K
-        ]
-
-        pairs = [
-            (
-                question,
-                documents_by_id[
-                    document_id
-                ]["text"],
+            key=lambda item: (
+                item[1],
+                item[0],
             )
-            for document_id, similarity
-            in candidates
-        ]
-
-        scores = reranker.predict(
-            pairs
         )
 
-        reranked_results = [
+        retrieved_candidates = retrieval_results[
+            :candidate_limit
+        ]
+
+        candidates = [
             (
-                document_id,
-                similarity,
-                float(reranker_score),
+                chunks_by_id[document_id],
+                distance,
             )
             for (
                 document_id,
+                distance,
                 similarity,
-            ), reranker_score
-            in zip(
-                candidates,
-                scores,
-                strict=True,
+            ) in retrieved_candidates
+        ]
+
+        reranked_results = (
+            reranker_service.rerank(
+                query=question,
+                candidates=candidates,
+            )
+        )
+
+        relevant_results = [
+            result
+            for result in reranked_results
+            if (
+                result[2]
+                >= settings.reranker_threshold
             )
         ]
 
-        reranked_results.sort(
-            key=lambda item: item[2],
-            reverse=True,
+        selected_results = relevant_results[
+            :EVAL_REQUEST_LIMIT
+        ]
+
+        predicted_has_answer = bool(
+            selected_results
         )
 
-        top_reranker_score = reranked_results[0][2]
+        expected_has_answer = (
+            expected_id is not None
+        )
+
+        if (
+            predicted_has_answer
+            == expected_has_answer
+        ):
+            answerability_correct += 1
+
+        retrieval_top_id = (
+            retrieved_candidates[0][0]
+        )
+
+        reranker_top_id = (
+            reranked_results[0][0].eval_id
+        )
+
+        selected_ids = [
+            chunk.eval_id
+            for (
+                chunk,
+                distance,
+                score,
+            ) in selected_results
+        ]
+
+        if expected_has_answer:
+            answerable_cases += 1
+
+            if retrieval_top_id == expected_id:
+                retrieval_hit_at_1 += 1
+
+            if reranker_top_id == expected_id:
+                reranker_hit_at_1 += 1
+
+            if predicted_has_answer:
+                answerable_accepted += 1
+
+            if (
+                selected_ids
+                and selected_ids[0]
+                == expected_id
+            ):
+                selected_hit_at_1 += 1
+
+            if expected_id in selected_ids:
+                pipeline_correct += 1
+
+            expected_score = None
+
+            for (
+                chunk,
+                distance,
+                reranker_score,
+            ) in reranked_results:
+                if chunk.eval_id == expected_id:
+                    expected_score = reranker_score
+                    break
+
+            if expected_score is not None:
+                positive_scores.append(
+                    expected_score
+                )
+
+                positive_examples.append(
+                    (
+                        expected_score,
+                        question,
+                        expected_id,
+                    )
+                )
+
+        else:
+            no_answer_cases += 1
+
+            if not predicted_has_answer:
+                correct_rejections += 1
+                pipeline_correct += 1
+
+            top_score = (
+                reranked_results[0][2]
+            )
+
+            negative_scores.append(
+                top_score
+            )
+
+            negative_examples.append(
+                (
+                    top_score,
+                    question,
+                    reranker_top_id,
+                )
+            )
+
+        top_reranker_score = (
+            reranked_results[0][2]
+        )
 
         answerability_examples.append(
             (
                 top_reranker_score,
-                expected_id is not None,
+                expected_has_answer,
             )
         )
 
@@ -166,93 +307,48 @@ def evaluate():
         print(
             f"Expected: {expected_id}"
         )
-
         print(
-            "Retrieval top 1: "
-            f"{candidates[0][0]} "
-            f"(similarity="
-            f"{candidates[0][1]:.4f})"
+            f"Retrieval top 1: "
+            f"{retrieval_top_id}"
         )
-
         print(
-            "Reranker top 1: "
-            f"{reranked_results[0][0]} "
+            f"Reranker top 1: "
+            f"{reranker_top_id} "
             f"(score="
-            f"{reranked_results[0][2]:.4f})"
+            f"{top_reranker_score:.4f})"
+        )
+        print(
+            "Production decision: "
+            + (
+                "ANSWER"
+                if predicted_has_answer
+                else "NO ANSWER"
+            )
         )
 
-        print("Reranked top 5:")
+        print(
+            f"Selected sources: "
+            f"{selected_ids}"
+        )
+
+        print("Reranked candidates:")
 
         for (
-            document_id,
-            similarity,
+            chunk,
+            distance,
             reranker_score,
         ) in reranked_results:
             print(
-                f"  {document_id}: "
-                f"retrieval={similarity:.4f}, "
+                f"  {chunk.eval_id}: "
+                f"distance={distance:.4f}, "
                 f"reranker={reranker_score:.4f}"
             )
 
-        if expected_id is not None:
-            answerable_cases += 1
-
-            if (
-                candidates[0][0]
-                == expected_id
-            ):
-                retrieval_hit_at_1 += 1
-
-            if (
-                reranked_results[0][0]
-                == expected_id
-            ):
-                reranker_hit_at_1 += 1
-
-            for (
-                document_id,
-                similarity,
-                reranker_score,
-            ) in reranked_results:
-                if document_id == expected_id:
-                    positive_scores.append(
-                        reranker_score
-                    )
-
-                    positive_examples.append(
-                        (
-                            reranker_score,
-                            question,
-                            document_id,
-                        )
-                    )
-
-                    break
-
-        else:
-            best_negative_id = (
-                reranked_results[0][0]
-            )
-
-            best_negative_score = (
-                reranked_results[0][2]
-            )
-
-            negative_scores.append(
-                best_negative_score
-            )
-
-            negative_examples.append(
-                (
-                    best_negative_score,
-                    question,
-                    best_negative_id,
-                )
-            )
+    total_cases = len(EVAL_CASES)
 
     print()
     print(
-        "=== Reranker Evaluation ==="
+        "=== Production Pipeline Evaluation ==="
     )
 
     print(
@@ -269,6 +365,46 @@ def evaluate():
         f"{answerable_cases} "
         f"= "
         f"{reranker_hit_at_1 / answerable_cases:.2%}"
+    )
+
+    print(
+        "Selected Hit@1: "
+        f"{selected_hit_at_1}/"
+        f"{answerable_cases} "
+        f"= "
+        f"{selected_hit_at_1 / answerable_cases:.2%}"
+    )
+
+    print(
+        "Answerable accepted: "
+        f"{answerable_accepted}/"
+        f"{answerable_cases} "
+        f"= "
+        f"{answerable_accepted / answerable_cases:.2%}"
+    )
+
+    print(
+        "No-answer rejection: "
+        f"{correct_rejections}/"
+        f"{no_answer_cases} "
+        f"= "
+        f"{correct_rejections / no_answer_cases:.2%}"
+    )
+
+    print(
+        "Answerability accuracy: "
+        f"{answerability_correct}/"
+        f"{total_cases} "
+        f"= "
+        f"{answerability_correct / total_cases:.2%}"
+    )
+
+    print(
+        "Pipeline success: "
+        f"{pipeline_correct}/"
+        f"{total_cases} "
+        f"= "
+        f"{pipeline_correct / total_cases:.2%}"
     )
 
     if positive_scores:
@@ -293,20 +429,6 @@ def evaluate():
             f"{np.mean(negative_scores):.4f}"
         )
 
-    if (
-        positive_scores
-        and negative_scores
-    ):
-        score_gap = (
-            min(positive_scores)
-            - max(negative_scores)
-        )
-
-        print(
-            "Positive/negative score gap: "
-            f"{score_gap:.4f}"
-        )
-
     print()
     print("=== Lowest Positive Scores ===")
 
@@ -323,7 +445,6 @@ def evaluate():
             f"{document_id} | "
             f"{question}"
         )
-
 
     print()
     print("=== Highest No-Answer Scores ===")
@@ -344,19 +465,8 @@ def evaluate():
         )
 
     print()
-    print("=== Reranker Threshold Comparison ===")
-
-    total_cases = len(answerability_examples)
-
-    answerable_cases = sum(
-        1
-        for _, expected_has_answer
-        in answerability_examples
-        if expected_has_answer
-    )
-
-    no_answer_cases = (
-        total_cases - answerable_cases
+    print(
+        "=== Experimental Threshold Comparison ==="
     )
 
     for threshold in RERANKER_THRESHOLDS:
@@ -397,11 +507,20 @@ def evaluate():
             / no_answer_cases
         )
 
+        marker = ""
+
+        if (
+            threshold
+            == settings.reranker_threshold
+        ):
+            marker = " <-- production"
+
         print(
             f"threshold={threshold:>4.1f} | "
             f"overall={overall_accuracy:.2%} | "
             f"answerable={answerable_accuracy:.2%} | "
             f"no-answer={no_answer_accuracy:.2%}"
+            f"{marker}"
         )
 
 
