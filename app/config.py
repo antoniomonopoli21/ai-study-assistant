@@ -13,7 +13,6 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-6-luna"
 
-    rag_max_distance: float = 0.25
 
     reranker_model: str = Field(
         default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
