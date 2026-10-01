@@ -1,0 +1,71 @@
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg17
+
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ai_study_assistant
+
+    ports:
+      - "5433:5432"
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U postgres -d ai_study_assistant"
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    build: .
+
+    env_file:
+      - .env
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant_test
+
+    command:
+      [
+        "alembic",
+        "upgrade",
+        "head"
+      ]
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    build: .
+
+    env_file:
+      - .env
+
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant
+      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant_test
+      HF_HOME: /root/.cache/huggingface
+
+    ports:
+      - "8000:8000"
+
+    volumes:
+      - huggingface_cache:/root/.cache/huggingface
+
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+
+volumes:
+  postgres_data:
+  huggingface_cache:
