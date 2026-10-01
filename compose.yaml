@@ -31,7 +31,6 @@ services:
 
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant
-      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant_test
 
     command:
       [
@@ -52,7 +51,6 @@ services:
 
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant
-      TEST_DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/ai_study_assistant_test
       HF_HOME: /root/.cache/huggingface
 
     ports:

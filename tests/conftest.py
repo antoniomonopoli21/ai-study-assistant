@@ -17,13 +17,7 @@ import re
 from app.services.embeddings import embedding_service
 from app.services.reranker import reranker_service
 
-test_engine = create_engine(settings.test_database_url)
 
-TestingSessionLocal = sessionmaker(
-    bind=test_engine,
-    autoflush=False,
-    autocommit = False
-)
 
 def override_get_db():
     db = TestingSessionLocal()
@@ -71,8 +65,20 @@ def auth_headers(client):
     }
 
 
+def require_test_database_url() -> str:
+    if settings.test_database_url is None:
+        raise RuntimeError(
+            "TEST_DATABASE_URL must be set when running tests"
+        )
+
+    return settings.test_database_url
+
+
+TEST_DATABASE_URL = require_test_database_url()
+
+
 def ensure_safe_test_database():
-    test_url = make_url(settings.test_database_url)
+    test_url = make_url(TEST_DATABASE_URL)
     dev_url = make_url(settings.database_url)
 
     if test_url == dev_url:
@@ -80,13 +86,28 @@ def ensure_safe_test_database():
             "TEST_DATABASE_URL must not point to the development database"
         )
 
-    if test_url.database is None or "test" not in test_url.database.lower():
+    if (
+        test_url.database is None
+        or "test" not in test_url.database.lower()
+    ):
         raise RuntimeError(
-            "Refusing to run tests: database name must clearly be a test database"
+            "Refusing to run tests: database name "
+            "must clearly be a test database"
         )
 
 
 ensure_safe_test_database()
+
+
+test_engine = create_engine(
+    TEST_DATABASE_URL
+)
+
+TestingSessionLocal = sessionmaker(
+    bind=test_engine,
+    autoflush=False,
+    autocommit=False,
+)
 
 
 @pytest.fixture(autouse=True)
