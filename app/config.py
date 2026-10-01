@@ -13,6 +13,11 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-6-luna"
 
+    embedding_model: str = Field(
+        default="intfloat/multilingual-e5-small",
+        min_length=1,
+    )
+
 
     reranker_model: str = Field(
         default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",

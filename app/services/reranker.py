@@ -32,6 +32,22 @@ class RerankerService:
 
         return self._model
 
+    def load_model(self) -> None:
+        try:
+            self._get_model()
+        except Exception as exc:
+            logger.exception(
+                "Reranker model loading failed"
+            )
+
+            raise RerankerServiceError(
+                "Reranker model loading failed"
+            ) from exc
+
+    def is_ready(self) -> bool:
+        return self._model is not None
+
+
     def rerank(
         self,
         query: str,

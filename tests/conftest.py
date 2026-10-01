@@ -143,12 +143,22 @@ def fake_embedding_model(monkeypatch):
         fake_embed_query
     )
 
-
-
     monkeypatch.setattr(
         embedding_service,
         "embed_passages",
         fake_embed_passages
+    )
+
+    monkeypatch.setattr(
+        embedding_service,
+        "load_model",
+        lambda: None,
+    )
+
+    monkeypatch.setattr(
+        embedding_service,
+        "is_ready",
+        lambda: True,
     )
 
 
@@ -171,4 +181,16 @@ def fake_reranker_model(monkeypatch):
         reranker_service,
         "rerank",
         fake_rerank,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "load_model",
+        lambda: None,
+    )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "is_ready",
+        lambda: True,
     )
