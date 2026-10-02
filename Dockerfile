@@ -10,6 +10,9 @@ WORKDIR /app
 COPY requirements.txt .
 
 RUN python -m pip install --upgrade pip \
+    && python -m pip install \
+        torch==2.14.0 \
+        --index-url https://download.pytorch.org/whl/cpu \
     && python -m pip install -r requirements.txt
 
 RUN groupadd \
