@@ -1,4 +1,8 @@
-from pydantic import Field
+from typing import Literal
+
+from pydantic import Field, field_validator
+
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,7 +15,9 @@ class Settings(BaseSettings):
     )
 
     jwt_secret_key: str
-    jwt_algorithm: str
+
+    jwt_algorithm: Literal["HS256"] = "HS256"
+
     access_token_expire_minutes: int
 
     openai_api_key: str
@@ -38,6 +44,30 @@ class Settings(BaseSettings):
         ge=1,
         le=20,
     )
+
+    @field_validator(
+        "jwt_secret_key",
+        mode="before",
+    )
+    @classmethod
+    def validate_jwt_secret_key(
+        cls,
+        value: str,
+    ) -> str:
+        if not isinstance(value, str):
+            raise ValueError(
+                "JWT_SECRET_KEY must be a string"
+            )
+
+        value = value.strip()
+
+        if len(value) < 32:
+            raise ValueError(
+                "JWT_SECRET_KEY must contain "
+                "at least 32 characters"
+            )
+
+        return value
 
     model_config = SettingsConfigDict(
         env_file=".env",
