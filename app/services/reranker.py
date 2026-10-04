@@ -27,7 +27,8 @@ class RerankerService:
             with self._model_lock:
                 if self._model is None:
                     self._model = CrossEncoder(
-                        settings.reranker_model
+                        settings.reranker_model,
+                        revision=settings.reranker_model_revision,
                     )
 
         return self._model

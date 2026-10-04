@@ -22,7 +22,8 @@ class EmbeddingService:
             with self._model_lock:
                 if self._model is None:
                     model = SentenceTransformer(
-                        settings.embedding_model
+                        settings.embedding_model,
+                        revision=settings.embedding_model_revision,
                     )
 
                     dimension = (

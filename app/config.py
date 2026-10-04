@@ -28,10 +28,20 @@ class Settings(BaseSettings):
         min_length=1,
     )
 
+    embedding_model_revision: str = Field(
+        default="614241f622f53c4eeff9890bdc4f31cfecc418b3",
+        pattern=r"^[0-9a-f]{40}$",
+    )
+
 
     reranker_model: str = Field(
         default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
         min_length=1,
+    )
+
+    reranker_model_revision: str = Field(
+        default="1427fd652930e4ba29e8149678df786c240d8825",
+        pattern=r"^[0-9a-f]{40}$",
     )
 
     reranker_threshold: float = Field(
