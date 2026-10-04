@@ -5,16 +5,6 @@ ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
 ENV HF_HOME=/home/appuser/.cache/huggingface
 
-ARG EMBEDDING_MODEL=intfloat/multilingual-e5-small
-ARG EMBEDDING_MODEL_REVISION=614241f622f53c4eeff9890bdc4f31cfecc418b3
-ARG RERANKER_MODEL=cross-encoder/mmarco-mMiniLMv2-L12-H384-v1
-ARG RERANKER_MODEL_REVISION=1427fd652930e4ba29e8149678df786c240d8825
-
-ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
-ENV EMBEDDING_MODEL_REVISION=${EMBEDDING_MODEL_REVISION}
-ENV RERANKER_MODEL=${RERANKER_MODEL}
-ENV RERANKER_MODEL_REVISION=${RERANKER_MODEL_REVISION}
-
 WORKDIR /app
 
 COPY requirements.txt .
@@ -39,18 +29,24 @@ RUN groupadd \
     && mkdir -p /home/appuser/.cache/huggingface \
     && chown -R appuser:appuser /home/appuser
 
+COPY --chown=appuser:appuser model_manifest.json ./model_manifest.json
+
 USER appuser
 
 RUN python -c "\
+import json; \
+from pathlib import Path; \
 from huggingface_hub import snapshot_download; \
-import os; \
-snapshot_download( \
-    repo_id=os.environ['EMBEDDING_MODEL'], \
-    revision=os.environ['EMBEDDING_MODEL_REVISION'] \
+manifest = json.loads( \
+    Path('/app/model_manifest.json').read_text() \
 ); \
 snapshot_download( \
-    repo_id=os.environ['RERANKER_MODEL'], \
-    revision=os.environ['RERANKER_MODEL_REVISION'] \
+    repo_id=manifest['embedding']['model'], \
+    revision=manifest['embedding']['revision'] \
+); \
+snapshot_download( \
+    repo_id=manifest['reranker']['model'], \
+    revision=manifest['reranker']['revision'] \
 )"
 
 ENV HF_HUB_OFFLINE=1

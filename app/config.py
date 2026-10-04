@@ -1,10 +1,9 @@
 from typing import Literal
 
 from pydantic import Field, field_validator
-
-
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.model_manifest import model_manifest
 
 class Settings(BaseSettings):
     database_url: str
@@ -23,27 +22,6 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-6-luna"
 
-    embedding_model: str = Field(
-        default="intfloat/multilingual-e5-small",
-        min_length=1,
-    )
-
-    embedding_model_revision: str = Field(
-        default="614241f622f53c4eeff9890bdc4f31cfecc418b3",
-        pattern=r"^[0-9a-f]{40}$",
-    )
-
-
-    reranker_model: str = Field(
-        default="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1",
-        min_length=1,
-    )
-
-    reranker_model_revision: str = Field(
-        default="1427fd652930e4ba29e8149678df786c240d8825",
-        pattern=r"^[0-9a-f]{40}$",
-    )
-
     reranker_threshold: float = Field(
         default=0.5,
         allow_inf_nan=False,
@@ -54,6 +32,22 @@ class Settings(BaseSettings):
         ge=1,
         le=20,
     )
+
+    @property
+    def embedding_model(self) -> str:
+        return model_manifest.embedding.model
+
+    @property
+    def embedding_model_revision(self) -> str:
+        return model_manifest.embedding.revision
+
+    @property
+    def reranker_model(self) -> str:
+        return model_manifest.reranker.model
+
+    @property
+    def reranker_model_revision(self) -> str:
+        return model_manifest.reranker.revision
 
     @field_validator(
         "jwt_secret_key",
