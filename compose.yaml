@@ -69,8 +69,6 @@ services:
       retries: 5
       start_period: 120s
 
-    volumes:
-    - huggingface_cache:/home/appuser/.cache/huggingface
 
     depends_on:
       migrate:
@@ -79,4 +77,4 @@ services:
 
 volumes:
   postgres_data:
-  huggingface_cache:
+  
