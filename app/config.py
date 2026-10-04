@@ -6,7 +6,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from app.model_manifest import model_manifest
 
 class Settings(BaseSettings):
-    database_url: str
+    database_url: str | None = None
+
+    postgres_host: str | None = None
+    postgres_port: int | None = None
+    postgres_user: str | None = None
+    postgres_password: str | None = None
+    postgres_db: str | None = None
 
     test_database_url: str | None = Field(
         default=None,
