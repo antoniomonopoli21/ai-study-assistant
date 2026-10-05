@@ -44,3 +44,18 @@ def test_rejects_unsupported_jwt_algorithm():
             jwt_secret_key="a" * 32,
             jwt_algorithm="HS512",
         )
+
+
+def test_validation_error_hides_invalid_jwt_secret():
+    invalid_secret = "do-not-log-me"
+
+    with pytest.raises(ValidationError) as exc_info:
+        make_settings(
+            jwt_secret_key=invalid_secret
+        )
+
+    error_message = str(
+        exc_info.value
+    )
+
+    assert invalid_secret not in error_message
