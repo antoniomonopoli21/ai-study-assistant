@@ -1,23 +1,13 @@
 from typing import Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import SettingsConfigDict
 
 from app.model_manifest import model_manifest
 
-class Settings(BaseSettings):
-    database_url: str | None = None
+from app.database_config import DatabaseSettings
 
-    postgres_host: str | None = None
-    postgres_port: int | None = None
-    postgres_user: str | None = None
-    postgres_password: str | None = None
-    postgres_db: str | None = None
-
-    test_database_url: str | None = Field(
-        default=None,
-        min_length=1,
-    )
+class Settings(DatabaseSettings):
 
     jwt_secret_key: str
 

@@ -1,6 +1,6 @@
 from sqlalchemy.engine import URL, make_url
 
-from app.config import settings
+from app.database_config import database_settings
 
 
 def create_postgres_url(
@@ -23,14 +23,14 @@ def create_postgres_url(
 
 def get_database_url() -> URL:
     postgres_components = {
-        "POSTGRES_HOST": settings.postgres_host,
-        "POSTGRES_PORT": settings.postgres_port,
-        "POSTGRES_USER": settings.postgres_user,
-        "POSTGRES_PASSWORD": settings.postgres_password,
-        "POSTGRES_DB": settings.postgres_db,
+        "POSTGRES_HOST": database_settings.postgres_host,
+        "POSTGRES_PORT": database_settings.postgres_port,
+        "POSTGRES_USER": database_settings.postgres_user,
+        "POSTGRES_PASSWORD": database_settings.postgres_password,
+        "POSTGRES_DB": database_settings.postgres_db,
     }
 
-    if settings.postgres_host is not None:
+    if database_settings.postgres_host is not None:
         missing = [
             name
             for name, value in postgres_components.items()
@@ -45,16 +45,16 @@ def get_database_url() -> URL:
             )
 
         return create_postgres_url(
-            username=settings.postgres_user,
-            password=settings.postgres_password,
-            host=settings.postgres_host,
-            port=settings.postgres_port,
-            database=settings.postgres_db,
+            username=database_settings.postgres_user,
+            password=database_settings.postgres_password,
+            host=database_settings.postgres_host,
+            port=database_settings.postgres_port,
+            database=database_settings.postgres_db,
         )
 
-    if settings.database_url is not None:
+    if database_settings.database_url is not None:
         return make_url(
-            settings.database_url
+            database_settings.database_url
         )
 
     raise RuntimeError(
