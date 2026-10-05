@@ -1,3 +1,10 @@
+import pytest
+
+from fastapi.testclient import TestClient
+
+from app.main import app
+
+
 def test_health(client):
     response = client.get("/health")
 
@@ -54,3 +61,50 @@ def test_readiness_returns_503_when_model_is_not_ready(
         data["components"]["database"]
         == "ready"
     )
+
+def test_startup_fails_when_embedding_model_cannot_load(
+    monkeypatch,
+):
+    from app.main import embedding_service
+
+    def fail_load_model():
+        raise RuntimeError(
+            "synthetic embedding startup failure"
+        )
+
+    monkeypatch.setattr(
+        embedding_service,
+        "load_model",
+        fail_load_model,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="synthetic embedding startup failure",
+    ):
+        with TestClient(app):
+            pass
+
+
+def test_startup_fails_when_reranker_model_cannot_load(
+    monkeypatch,
+):
+    from app.main import reranker_service
+
+    def fail_load_model():
+        raise RuntimeError(
+            "synthetic reranker startup failure"
+        )
+
+    monkeypatch.setattr(
+        reranker_service,
+        "load_model",
+        fail_load_model,
+    )
+
+    with pytest.raises(
+        RuntimeError,
+        match="synthetic reranker startup failure",
+    ):
+        with TestClient(app):
+            pass

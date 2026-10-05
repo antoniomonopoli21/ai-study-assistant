@@ -11,14 +11,9 @@ from app.database import get_db
 from app.routers.auth import router as auth_router
 from app.routers.notes import router as notes_router
 from app.routers import ask, search
-from app.services.embeddings import (
-    EmbeddingServiceError,
-    embedding_service,
-)
-from app.services.reranker import (
-    RerankerServiceError,
-    reranker_service,
-)
+
+from app.services.embeddings import embedding_service
+from app.services.reranker import reranker_service
 
 
 logger = logging.getLogger(__name__)
@@ -26,25 +21,17 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    try:
-        embedding_service.load_model()
-        logger.info(
-            "Embedding model loaded successfully"
-        )
-    except EmbeddingServiceError:
-        logger.exception(
-            "Embedding model failed to load"
-        )
+    embedding_service.load_model()
 
-    try:
-        reranker_service.load_model()
-        logger.info(
-            "Reranker model loaded successfully"
-        )
-    except RerankerServiceError:
-        logger.exception(
-            "Reranker model failed to load"
-        )
+    logger.info(
+        "Embedding model loaded successfully"
+    )
+
+    reranker_service.load_model()
+
+    logger.info(
+        "Reranker model loaded successfully"
+    )
 
     yield
 
