@@ -1,19 +1,10 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PIP_NO_CACHE_DIR=1
-ENV HF_HOME=/home/appuser/.cache/huggingface
 
 WORKDIR /app
-
-COPY requirements.txt .
-
-RUN python -m pip install --upgrade pip \
-    && python -m pip install \
-        torch==2.14.0 \
-        --index-url https://download.pytorch.org/whl/cpu \
-    && python -m pip install -r requirements.txt
 
 RUN groupadd \
         --system \
@@ -25,8 +16,39 @@ RUN groupadd \
         --gid appuser \
         --create-home \
         --home-dir /home/appuser \
-        appuser \
-    && mkdir -p /home/appuser/.cache/huggingface \
+        appuser
+
+
+FROM base AS migrate
+
+COPY requirements-migrate.txt .
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install -r requirements-migrate.txt
+
+COPY --chown=appuser:appuser app ./app
+COPY --chown=appuser:appuser alembic ./alembic
+COPY --chown=appuser:appuser alembic.ini .
+COPY --chown=appuser:appuser model_manifest.json ./model_manifest.json
+
+USER appuser
+
+CMD ["alembic", "upgrade", "head"]
+
+
+FROM base AS api
+
+ENV HF_HOME=/home/appuser/.cache/huggingface
+
+COPY requirements.txt .
+
+RUN python -m pip install --upgrade pip \
+    && python -m pip install \
+        torch==2.14.0 \
+        --index-url https://download.pytorch.org/whl/cpu \
+    && python -m pip install -r requirements.txt
+
+RUN mkdir -p /home/appuser/.cache/huggingface \
     && chown -R appuser:appuser /home/appuser
 
 COPY --chown=appuser:appuser model_manifest.json ./model_manifest.json
@@ -60,8 +82,6 @@ ENV HF_HUB_OFFLINE=1
 ENV TRANSFORMERS_OFFLINE=1
 
 COPY --chown=appuser:appuser app ./app
-COPY --chown=appuser:appuser alembic ./alembic
-COPY --chown=appuser:appuser alembic.ini .
 
 EXPOSE 8000
 
