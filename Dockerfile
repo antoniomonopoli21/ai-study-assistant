@@ -40,13 +40,20 @@ from huggingface_hub import snapshot_download; \
 manifest = json.loads( \
     Path('/app/model_manifest.json').read_text() \
 ); \
+ignored_files = [ \
+    'onnx/*', \
+    'openvino/*', \
+    'pytorch_model.bin', \
+]; \
 snapshot_download( \
     repo_id=manifest['embedding']['model'], \
-    revision=manifest['embedding']['revision'] \
+    revision=manifest['embedding']['revision'], \
+    ignore_patterns=ignored_files \
 ); \
 snapshot_download( \
     repo_id=manifest['reranker']['model'], \
-    revision=manifest['reranker']['revision'] \
+    revision=manifest['reranker']['revision'], \
+    ignore_patterns=ignored_files \
 )"
 
 ENV HF_HUB_OFFLINE=1
